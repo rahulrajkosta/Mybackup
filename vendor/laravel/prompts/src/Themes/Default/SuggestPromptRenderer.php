@@ -3,9 +3,8 @@
 namespace Laravel\Prompts\Themes\Default;
 
 use Laravel\Prompts\SuggestPrompt;
-use Laravel\Prompts\Themes\Contracts\Scrolling;
 
-class SuggestPromptRenderer extends Renderer implements Scrolling
+class SuggestPromptRenderer extends Renderer
 {
     use Concerns\DrawsBoxes;
     use Concerns\DrawsScrollbars;
@@ -47,12 +46,8 @@ class SuggestPromptRenderer extends Renderer implements Scrolling
                     $this->valueWithCursorAndArrow($prompt, $maxWidth),
                     $this->renderOptions($prompt),
                 )
-                ->when(
-                    $prompt->hint,
-                    fn () => $this->hint($prompt->hint),
-                    fn () => $this->newLine() // Space for errors
-                )
-                ->spaceForDropdown($prompt),
+                ->spaceForDropdown($prompt)
+                ->newLine(), // Space for errors
         };
     }
 
@@ -97,26 +92,17 @@ class SuggestPromptRenderer extends Renderer implements Scrolling
             return '';
         }
 
-        return $this->scrollbar(
-            collect($prompt->visible())
+        return $this->scroll(
+            collect($prompt->matches())
                 ->map(fn ($label) => $this->truncate($label, $prompt->terminal()->cols() - 10))
-                ->map(fn ($label, $key) => $prompt->highlighted === $key
+                ->map(fn ($label, $i) => $prompt->highlighted === $i
                     ? "{$this->cyan('›')} {$label}  "
                     : "  {$this->dim($label)}  "
                 ),
-            $prompt->firstVisible,
-            $prompt->scroll,
-            count($prompt->matches()),
+            $prompt->highlighted,
+            min($prompt->scroll, $prompt->terminal()->lines() - 7),
             min($this->longest($prompt->matches(), padding: 4), $prompt->terminal()->cols() - 6),
             $prompt->state === 'cancel' ? 'dim' : 'cyan'
         )->implode(PHP_EOL);
-    }
-
-    /**
-     * The number of lines to reserve outside of the scrollable area.
-     */
-    public function reservedLines(): int
-    {
-        return 7;
     }
 }

@@ -3,13 +3,16 @@
 namespace Laravel\Prompts;
 
 use Closure;
-use InvalidArgumentException;
 
 class SearchPrompt extends Prompt
 {
-    use Concerns\Scrolling;
     use Concerns\Truncation;
     use Concerns\TypedValue;
+
+    /**
+     * The index of the highlighted option.
+     */
+    public ?int $highlighted = null;
 
     /**
      * The cached matches.
@@ -19,7 +22,7 @@ class SearchPrompt extends Prompt
     protected ?array $matches = null;
 
     /**
-     * Create a new SearchPrompt instance.
+     * Create a new SuggestPrompt instance.
      *
      * @param  Closure(string): array<int|string, string>  $options
      */
@@ -29,38 +32,24 @@ class SearchPrompt extends Prompt
         public string $placeholder = '',
         public int $scroll = 5,
         public ?Closure $validate = null,
-        public string $hint = '',
-        public bool|string $required = true,
     ) {
-        if ($this->required === false) {
-            throw new InvalidArgumentException('Argument [required] must be true or a string.');
-        }
-
-        $this->trackTypedValue(submit: false, ignore: fn ($key) => Key::oneOf([Key::HOME, Key::END, Key::CTRL_A, Key::CTRL_E], $key) && $this->highlighted !== null);
-
-        $this->initializeScrolling(null);
+        $this->trackTypedValue(submit: false);
 
         $this->on('key', fn ($key) => match ($key) {
-            Key::UP, Key::UP_ARROW, Key::SHIFT_TAB, Key::CTRL_P => $this->highlightPrevious(count($this->matches), true),
-            Key::DOWN, Key::DOWN_ARROW, Key::TAB, Key::CTRL_N => $this->highlightNext(count($this->matches), true),
-            Key::oneOf([Key::HOME, Key::CTRL_A], $key) => $this->highlighted !== null ? $this->highlight(0) : null,
-            Key::oneOf([Key::END, Key::CTRL_E], $key) => $this->highlighted !== null ? $this->highlight(count($this->matches()) - 1) : null,
+            Key::UP, Key::UP_ARROW, Key::SHIFT_TAB => $this->highlightPrevious(),
+            Key::DOWN, Key::DOWN_ARROW, Key::TAB => $this->highlightNext(),
             Key::ENTER => $this->highlighted !== null ? $this->submit() : $this->search(),
-            Key::oneOf([Key::LEFT, Key::LEFT_ARROW, Key::RIGHT, Key::RIGHT_ARROW, Key::CTRL_B, Key::CTRL_F], $key) => $this->highlighted = null,
+            Key::LEFT, Key::LEFT_ARROW, Key::RIGHT, Key::RIGHT_ARROW => $this->highlighted = null,
             default => $this->search(),
         });
     }
 
-    /**
-     * Perform the search.
-     */
     protected function search(): void
     {
         $this->state = 'searching';
         $this->highlighted = null;
         $this->render();
         $this->matches = null;
-        $this->firstVisible = 0;
         $this->state = 'active';
     }
 
@@ -97,26 +86,40 @@ class SearchPrompt extends Prompt
     }
 
     /**
-     * The currently visible matches.
-     *
-     * @return array<string>
+     * Highlight the previous entry, or wrap around to the last entry.
      */
-    public function visible(): array
+    protected function highlightPrevious(): void
     {
-        return array_slice($this->matches(), $this->firstVisible, $this->scroll, preserve_keys: true);
+        if ($this->matches === []) {
+            $this->highlighted = null;
+        } elseif ($this->highlighted === null) {
+            $this->highlighted = count($this->matches) - 1;
+        } elseif ($this->highlighted === 0) {
+            $this->highlighted = null;
+        } else {
+            $this->highlighted = $this->highlighted - 1;
+        }
     }
 
     /**
-     * Get the current search query.
+     * Highlight the next entry, or wrap around to the first entry.
      */
+    protected function highlightNext(): void
+    {
+        if ($this->matches === []) {
+            $this->highlighted = null;
+        } elseif ($this->highlighted === null) {
+            $this->highlighted = 0;
+        } else {
+            $this->highlighted = $this->highlighted === count($this->matches) - 1 ? null : $this->highlighted + 1;
+        }
+    }
+
     public function searchValue(): string
     {
         return $this->typedValue;
     }
 
-    /**
-     * Get the selected value.
-     */
     public function value(): int|string|null
     {
         if ($this->matches === null || $this->highlighted === null) {

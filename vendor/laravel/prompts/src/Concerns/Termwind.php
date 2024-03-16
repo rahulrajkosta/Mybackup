@@ -3,7 +3,6 @@
 namespace Laravel\Prompts\Concerns;
 
 use Laravel\Prompts\Output\BufferedConsoleOutput;
-
 use function Termwind\render;
 use function Termwind\renderUsing;
 
